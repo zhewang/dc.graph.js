@@ -1445,28 +1445,19 @@ dc_graph.diagram = function (parent, chartGroup) {
         // annotate parallel edges so we can draw them specially
         if(_diagram.parallelEdgeOffset()) {
             var em = new Array(wnodes.length);
-            for(var i = 0; i < wnodes.length; ++i)
-                em[i] = new Array(i);
+            for(var i = 0; i < wnodes.length; ++i) {
+                em[i] = new Array(wnodes.length); // technically could be diagonal array
+                for(var j = 0; j < wnodes.length; ++j)
+                    em[i][j] = {
+                        rev: []
+                    };
+            }
             wedges.forEach(function(e) {
-                e.pos = e.pos || {};
-                var min, max, minattr, maxattr;
-                if(e.source.index < e.target.index) {
-                    min = e.source.index; max = e.target.index;
-                    minattr = 'edgeSourcePortName'; maxattr = 'edgeTargetPortName';
-                } else {
-                    max = e.source.index; min = e.target.index;
-                    maxattr = 'edgeSourcePortName'; minattr = 'edgeTargetPortName';
-                }
-                var minport = _diagram[minattr].eval(e) || 'no port',
-                    maxport = _diagram[maxattr].eval(e) || 'no port';
-                em[max][min] = em[max][min] || {};
-                em[max][min][maxport] = em[max][min][maxport] || {};
-                e.parallel = em[max][min][maxport][minport] = em[max][min][maxport][minport] || {
-                    rev: [],
-                    edges: []
-                };
-                e.parallel.edges.push(e);
-                e.parallel.rev.push(min !== e.source.index);
+                var min = Math.min(e.source.index, e.target.index),
+                    max = Math.max(e.source.index, e.target.index);
+                e.parallel = em[min][max].rev.length;
+                e.ports = em[min][max];
+                e.ports.rev.push(min !== e.source.index);
             });
         }
 
@@ -1903,30 +1894,30 @@ dc_graph.diagram = function (parent, chartGroup) {
         }
     }
 
-    function calculate_arrowhead_orientation(points, end) {
-        var spos = points[0], tpos = points[points.length-1];
-        var partial = bezier_point(points, end === 'tail' ? 0.25 : 0.75);
-        return (end === 'head' ?
-                Math.atan2(tpos.y - partial.y, tpos.x - partial.x) :
-                Math.atan2(spos.y - partial.y, spos.x - partial.x)) + 'rad';
-    }
-
-    function enforce_path_direction(path, spos, tpos) {
-        var points = path.points, first = points[0], last = points[points.length-1];
-        switch(_diagram.enforceEdgeDirection()) {
-        case 'LR':
-            if(spos.x >= tpos.x) {
-                var dx = first.x - last.x;
-                return {
-                    points: [
-                        first,
-                        {x: first.x + dx, y: first.y - dx/2},
-                        {x: last.x - dx, y: last.y - dx/2},
-                        last
-                    ],
-                    bezDegree: 3,
-                    sourcePort: path.sourcePort,
-                    targetPort: path.targetPort
+    function calc_edge_path(d, age, sx, sy, tx, ty) {
+        if(!d.ports[age]) {
+            var source_padding = d.source.dcg_ry +
+                    _chart.nodeStrokeWidth.eval(d.source) / 2,
+                target_padding = d.target.dcg_ry +
+                    _chart.nodeStrokeWidth.eval(d.target) / 2;
+            d.ports[age] = new Array(d.ports.n);
+            var reversedness = d.ports.rev[d.parallel];
+            for(var p = 0; p < d.ports.rev.length; ++p) {
+                // alternate parallel edges over, then under
+                var dir = (!!(p%2) === (sx < tx)) ? -1 : 1,
+                    port = Math.floor((p+1)/2),
+                    last = port ? d.ports[age][p > 2 ? p - 2 : 0].path : null;
+                var path = draw_edge_to_shapes(_chart, d.source, d.target, sx, sy, tx, ty,
+                                              last, dir, _chart.parallelEdgeOffset(),
+                                              source_padding, target_padding
+                                              );
+                if(d.ports.rev[p] !== reversedness)
+                    path.points.reverse();
+                var spos = path.points[0], tpos = path.points[path.points.length-1];
+                var near = bezier_point(path.points, 0.75);
+                d.ports[age][p] = {
+                    path: path,
+                    orient: Math.atan2(tpos.y - near.y, tpos.x - near.x) + 'rad'
                 };
             }
             break;
