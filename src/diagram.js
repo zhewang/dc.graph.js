@@ -1449,15 +1449,17 @@ dc_graph.diagram = function (parent, chartGroup) {
                 em[i] = new Array(wnodes.length); // technically could be diagonal array
                 for(var j = 0; j < wnodes.length; ++j)
                     em[i][j] = {
-                        rev: []
+                        rev: [],
+                        edges: []
                     };
             }
             wedges.forEach(function(e) {
+                e.pos = {};
                 var min = Math.min(e.source.index, e.target.index),
                     max = Math.max(e.source.index, e.target.index);
-                e.parallel = em[min][max].rev.length;
-                e.ports = em[min][max];
-                e.ports.rev.push(min !== e.source.index);
+                e.parallel = em[min][max];
+                e.parallel.edges.push(e);
+                e.parallel.rev.push(min !== e.source.index);
             });
         }
 
@@ -1895,27 +1897,33 @@ dc_graph.diagram = function (parent, chartGroup) {
     }
 
     function calc_edge_path(d, age, sx, sy, tx, ty) {
-        if(!d.ports[age]) {
-            var source_padding = d.source.dcg_ry +
-                    _chart.nodeStrokeWidth.eval(d.source) / 2,
-                target_padding = d.target.dcg_ry +
-                    _chart.nodeStrokeWidth.eval(d.target) / 2;
-            d.ports[age] = new Array(d.ports.n);
-            var reversedness = d.ports.rev[d.parallel];
-            for(var p = 0; p < d.ports.rev.length; ++p) {
+        if(!d.pos[age]) {
+            var parallel = d.parallel;
+            var source = d.source, target = d.target;
+            if(d.source.index > d.target.index) {
+                var t;
+                t = target; target = source; source = t;
+                t = tx; tx = sx; sx = t;
+                t = ty; ty = sy; sy = t;
+            }
+            var source_padding = source.dcg_ry +
+                    _chart.nodeStrokeWidth.eval(source) / 2,
+                target_padding = target.dcg_ry +
+                    _chart.nodeStrokeWidth.eval(target) / 2;
+            for(var p = 0; p < parallel.edges.length; ++p) {
                 // alternate parallel edges over, then under
                 var dir = (!!(p%2) === (sx < tx)) ? -1 : 1,
                     port = Math.floor((p+1)/2),
-                    last = port ? d.ports[age][p > 2 ? p - 2 : 0].path : null;
-                var path = draw_edge_to_shapes(_chart, d.source, d.target, sx, sy, tx, ty,
+                    last = port ? parallel.edges[p > 2 ? p - 2 : 0].pos[age].path : null;
+                var path = draw_edge_to_shapes(_chart, source, target, sx, sy, tx, ty,
                                               last, dir, _chart.parallelEdgeOffset(),
                                               source_padding, target_padding
                                               );
-                if(d.ports.rev[p] !== reversedness)
+                if(parallel.rev[p])
                     path.points.reverse();
                 var spos = path.points[0], tpos = path.points[path.points.length-1];
                 var near = bezier_point(path.points, 0.75);
-                d.ports[age][p] = {
+                parallel.edges[p].pos[age] = {
                     path: path,
                     orient: Math.atan2(tpos.y - near.y, tpos.x - near.x) + 'rad'
                 };
@@ -1938,7 +1946,12 @@ dc_graph.diagram = function (parent, chartGroup) {
             }
             break;
         }
-        return path;
+        return d.pos[age].path;
+    }
+
+    function calc_old_edge_path(d) {
+        calc_edge_path(d, 'old', d.source.prevX || d.source.cola.x, d.source.prevY || d.source.cola.y,
+                         d.target.prevX || d.target.cola.x, d.target.prevY || d.target.cola.y);
     }
     function calc_edge_path(e, age, sx, sy, tx, ty) {
         var parallel = e.parallel;
@@ -1975,16 +1988,27 @@ dc_graph.diagram = function (parent, chartGroup) {
     }
 
     function render_edge_path(age) {
+<<<<<<< HEAD
         return function(e) {
             var path = e.pos[age].path;
+=======
+        return function(d) {
+            var path = d.pos[age].path;
+>>>>>>> simplify parallels further
             return generate_path(path.points, path.bezDegree);
         };
     }
 
     function render_edge_label_path(age) {
+<<<<<<< HEAD
         return function(e) {
             var path = e.pos[age].path;
             var points = path.points[path.points.length-1].x < path.points[0].x ?
+=======
+        return function(d) {
+            var path = d.pos[age].path;
+            var points = d.target.cola.x < d.source.cola.x ?
+>>>>>>> simplify parallels further
                     path.points.slice(0).reverse() : path.points;
             return generate_path(points, path.bezDegree);
         };
@@ -2143,6 +2167,7 @@ dc_graph.diagram = function (parent, chartGroup) {
                     n.prevY = n.cola.y;
                 });
 
+<<<<<<< HEAD
         // recalculate edge positions
         edge.each(function(e) {
             e.pos.new = null;
@@ -2186,6 +2211,12 @@ dc_graph.diagram = function (parent, chartGroup) {
             }
             else
                 e.pos.old = e.pos.new;
+=======
+        // reset edge ports
+        edge.each(function(d) {
+            d.pos.new = null;
+            d.pos.old = null;
+>>>>>>> simplify parallels further
         });
 
         var edgeEntered = {};
@@ -2200,12 +2231,16 @@ dc_graph.diagram = function (parent, chartGroup) {
                 if(_diagram.edgeArrowhead.eval(e))
                     d3.select('#' + _diagram.arrowId(e, 'head'))
                     .attr('orient', function() {
+<<<<<<< HEAD
                         return e.pos[age].orienthead;
                     });
                 if(_diagram.edgeArrowtail.eval(e))
                     d3.select('#' + _diagram.arrowId(e, 'tail'))
                     .attr('orient', function() {
                         return e.pos[age].orienttail;
+=======
+                        return e.pos[age].orient;
+>>>>>>> simplify parallels further
                     });
             })
             .attr('d', render_edge_path(_diagram.stageTransitions() === 'modins' ? 'new' : 'old'));
@@ -2217,6 +2252,7 @@ dc_graph.diagram = function (parent, chartGroup) {
                             .transition().duration(_diagram.stagedDuration())
                             .delay(_diagram.stagedDelay(false))
                             .attr('orient', function() {
+<<<<<<< HEAD
                                 return e.pos.new.orienthead;
                             });
                     if(_diagram.edgeArrowtail.eval(e))
@@ -2225,6 +2261,9 @@ dc_graph.diagram = function (parent, chartGroup) {
                             .delay(_diagram.stagedDelay(false))
                             .attr('orient', function() {
                                 return e.pos.new.orienttail;
+=======
+                                return e.pos.new.orient;
+>>>>>>> simplify parallels further
                             });
                 })
               .transition()
