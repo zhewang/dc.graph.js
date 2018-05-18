@@ -3171,8 +3171,9 @@ dc_graph.diagram = function (parent, chartGroup) {
                 return name ? 'url(#' + arrow_id + ')' : null;
             })
             .each(function(e) {
-                d3.selectAll('#' + _diagram.arrowId(e, 'head') + ',#' + _diagram.arrowId(e, 'tail'))
-                    .attr('fill', _diagram.edgeStroke.eval(e));
+                var fill = _diagram.edgeStroke.eval(e);
+                d3.selectAll('#' + _diagram.arrowId(e, 'head')).attr('fill', fill);
+                d3.selectAll('#' + _diagram.arrowId(e, 'tail')).attr('fill', fill);
             });
 
         _diagram._updateNode(node);
@@ -8558,21 +8559,71 @@ dc_graph.draw_spline_paths = function(pathreader, pathprops, hoverprops, pathsgr
     }
 
     // convert original path data into <d>
-    function genPath(p, lineTension) {
-        lineTension = lineTension || 0.6;
+    function genPath(originalPoints, lineTension, avoidSharpTurn, angleThreshold) {
+      var c = lineTension || 0;
+      var avoidSharpTurn = avoidSharpTurn !== false;
+      var angleThreshold = angleThreshold || 0.02;
 
-        var path_coord = getNodePosition(p);
-        if(pathprops.insertDummyNodes) {
-            path_coord = insertDummyNodes(path_coord);
+      // helper functions
+      var vecDot = function(v0, v1) { return v0.x*v1.x+v0.y*v1.y };
+      var vecMag = function(v) { return Math.sqrt(v.x*v.x + v.y*v.y) };
+
+      // get coordinates
+      var path_coord = getNodePosition(originalPoints);
+      if(path_coord.length < 2) return "";
+
+      // repeat first and last node
+      var points = [path_coord[0]];
+      points = points.concat(path_coord);
+      points.push(path_coord[path_coord.length-1]);
+
+      // a segment is a list of three points: [c0, c1, p1],
+      // representing the coordinates in "C x0,y0,x1,y1,x,y" in svg:path
+      var segments = []; // control points
+      for(var i = 1; i < points.length-2; i ++) {
+        // generate svg:path
+        var m_0_x = (1-c)*(points[i+1].x - points[i-1].x)/2;
+        var m_0_y = (1-c)*(points[i+1].y - points[i-1].y)/2;
+
+        var m_1_x = (1-c)*(points[i+2].x - points[i].x)/2;
+        var m_1_y = (1-c)*(points[i+2].y - points[i].y)/2;
+
+        var p0 = points[i];
+        var p1 = points[i+1];
+        var c0 = p0;
+        if(i !== 1) {
+          c0 = {x: p0.x+(m_0_x/3), y:p0.y+(m_0_y/3)};
+        }
+        var c1 = p1;
+        if(i !== points.length-3) {
+          c1 = {x: p1.x-(m_1_x/3), y:p1.y-(m_1_y/3)};
         }
 
-        var line = d3.svg.line()
-            .interpolate("cardinal")
-            .x(function(d) { return d.x; })
-            .y(function(d) { return d.y; })
-            .tension(lineTension);
+        // detect special case by calculating the angle
+        if(avoidSharpTurn) {
+          var v0 = {x:points[i-1].x - points[i].x, y:points[i-1].y - points[i].y};
+          var v1 = {x:points[i+1].x - points[i].x, y:points[i+1].y - points[i].y};
+          var angle = Math.acos( vecDot(v0,v1) / (vecMag(v0)*vecMag(v1)) );
 
-        return line(path_coord);
+          if(angle <= angleThreshold ){
+            var m_x = (1-c)*(points[i].x - points[i-1].x)/2;
+            var m_y = (1-c)*(points[i].y - points[i-1].y)/2;
+            c0 = {x: p0.x+(-m_y/3), y:p0.y+(m_x/3)};
+            segments[segments.length-1][1] = {x: p0.x-(-m_y/3), y:p0.y-(m_x/3)};
+          }
+        }
+
+        segments.push([c0,c1,p1]);
+      }
+
+      var path_d = "M"+points[0].x+","+points[0].y;
+      for(var i = 0; i < segments.length; i ++) {
+        var s = segments[i];
+        path_d += "C"+s[0].x+","+s[0].y;
+        path_d += ","+s[1].x+","+s[1].y;
+        path_d += ","+s[2].x+","+s[2].y;
+      }
+      return path_d;
     }
 
     // draw the spline for paths
@@ -10402,7 +10453,7 @@ dc_graph.path_reader = function(pathsgroup) {
 
 dc_graph.path_selector = function(parent, reader, pathsgroup, chartgroup) {
     var highlight_paths_group = dc_graph.register_highlight_paths_group(pathsgroup || 'highlight-paths-group');
-    var root = d3.select(parent);
+    var root = d3.select(parent).append('svg');
     var paths_ = [];
     var hovered = null, selected = null;
 
@@ -10434,42 +10485,88 @@ dc_graph.path_selector = function(parent, reader, pathsgroup, chartgroup) {
     // and allow customization rather than hardcoding everything
     // in fact, you can't even reliably overlap attributes without that (so we don't)
 
-    function draw_paths(paths) {
-        var p2 = root.selectAll('span.path-selector').data(paths);
-        p2.enter()
-            .append('span')
-            .attr('class', 'path-selector')
-            .style({
-                'border-width': '1px',
-                'border-style': 'solid',
-                'border-color': 'grey',
-                'border-radius': '4px',
-                'display': 'inline-block',
-                padding: '4px',
-                cursor: 'pointer',
-                margin: '5px'
-            });
-        p2.exit().transition(1000).attr('opacity', 0).remove();
-        p2.text(function(p, i) {
-            return 'path ' + (i+1) + ' (' + reader.elementList.eval(p).length + ')';
-        })
-            .on('mouseover', function(p) {
-                highlight_paths_group.hover_changed([p]);
-            })
-            .on('mouseout', function(p) {
-                highlight_paths_group.hover_changed(null);
-            })
-            .on('click', function(p) {
-                highlight_paths_group.select_changed(toggle_paths(selected, [p]));
-            });
-        var no_paths = root.selectAll('span.no-paths').data(paths.length === 0 ? [0] : []);
-        no_paths.exit().remove();
-        no_paths.enter()
-          .append('span')
-            .attr('class', 'no-paths');
-        no_paths
-            .classed('error', !!selector.error_text())
-            .text(selector.error_text() || (selector.queried() ? selector.zero_text() : selector.default_text()));
+    function draw_paths(diagram, paths) {
+        if(paths.length === 0) return;
+        // set the height of SVG accordingly
+        root.attr('height', 20*(paths.length+1));
+
+        var pathlist = root.selectAll('g.path-selector').data(paths);
+        pathlist.enter()
+          .append('g')
+          .attr('class', 'path-selector')
+          .attr("transform", function(path, i) { return "translate(0, " + i*20 + ")"; })
+          .on('mouseover', function(p) {
+              highlight_paths_group.hover_changed([p]);
+          })
+          .on('mouseout', function(p) {
+              highlight_paths_group.hover_changed(null);
+          })
+          .on('click', function(p) {
+              highlight_paths_group.select_changed(toggle_paths(selected, [p]));
+          })
+          .each(function(path, i) {
+            var nodes = path.element_list.filter(function(d) { return d.element_type === 'node'; });
+            var space = 30;
+            var radius = 8;
+            // line
+            var line = d3.select(this).append('line');
+            line.attr('x1', space)
+              .attr('y1', radius+1)
+              .attr('x2', space*nodes.length)
+              .attr('y2', radius+1)
+              .attr('stroke-width', 5)
+              .attr('stroke', '#bdbdbd');
+
+            // dots
+            var path = d3.select(this).selectAll('circle').data(nodes);
+            path.enter()
+              .append('circle')
+              .attr('cx', function(d, i) { return space*(i+1); })
+              .attr('cy', radius+1)
+              .attr('r', radius)
+              .attr('fill', function(d) {
+                // TODO path_selector shouldn't know the data structure of orignal node objects
+                var regeneratedNode = {key:d.property_map.ecomp_uid, value:d.property_map};
+                return diagram.nodeStroke()(regeneratedNode);
+              });
+          });
+        pathlist.exit().transition(1000).attr('opacity', 0).remove();
+
+        //var p2 = root.selectAll('span.path-selector').data(paths);
+        //p2.enter()
+            //.append('span')
+            //.attr('class', 'path-selector')
+            //.style({
+                //'border-width': '1px',
+                //'border-style': 'solid',
+                //'border-color': 'grey',
+                //'border-radius': '4px',
+                //'display': 'inline-block',
+                //padding: '4px',
+                //cursor: 'pointer',
+                //margin: '5px'
+            //});
+        //p2.exit().transition(1000).attr('opacity', 0).remove();
+        //p2.text(function(p, i) {
+            //return 'path ' + (i+1) + ' (' + reader.elementList.eval(p).length + ')';
+        //})
+            //.on('mouseover', function(p) {
+                //highlight_paths_group.hover_changed([p]);
+            //})
+            //.on('mouseout', function(p) {
+                //highlight_paths_group.hover_changed(null);
+            //})
+            //.on('click', function(p) {
+                //highlight_paths_group.select_changed(toggle_paths(selected, [p]));
+            //});
+        //var no_paths = root.selectAll('span.no-paths').data(paths.length === 0 ? [0] : []);
+        //no_paths.exit().remove();
+        //no_paths.enter()
+          //.append('span')
+            //.attr('class', 'no-paths');
+        //no_paths
+            //.classed('error', !!selector.error_text())
+            //.text(selector.error_text() || (selector.queried() ? selector.zero_text() : selector.default_text()));
     }
 
     function draw_hovered() {
@@ -10511,7 +10608,7 @@ dc_graph.path_selector = function(parent, reader, pathsgroup, chartgroup) {
         error_text: property(null),
         queried: property(false),
         redraw: function() {
-            draw_paths(paths_);
+            draw_paths(diagram, paths_);
             draw_hovered();
             draw_selected();
         },
