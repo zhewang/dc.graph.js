@@ -75,6 +75,7 @@ dc_graph.path_selector = function(parent, reader, pathsgroup, chartgroup) {
             // label
             var text = d3.select(this).append('text');
             text.text('Path '+i)
+              .attr('class', 'path_label')
               .attr('x', 0)
               .attr('y', radius*1.7)
               .on('mouseover', function() {
@@ -127,18 +128,17 @@ dc_graph.path_selector = function(parent, reader, pathsgroup, chartgroup) {
     }
 
     function draw_hovered() {
-        var is_hovered = contains_path(hovered);
-        root.selectAll('span.path-selector')
-            .style({
-                'border-color': function(p, i) { return is_hovered(p) ? '#e41a1c' : 'grey'; },
-                'border-width': function(p, i) { return (is_hovered(p) ? 2 : 1) + 'px'; },
-                padding: function(p, i) { return (is_hovered(p) ? 3 : 4) + 'px'; }
-            });
+      var is_hovered = contains_path(hovered);
+      root.selectAll('g.path-selector')
+        .each(function(d, i) {
+          var textColor = is_hovered(d) ? '#e41a1c' : 'black';
+          d3.select(this).select('.path_label').attr('fill', textColor);
+        });
     }
 
     function draw_selected() {
         var is_selected = contains_path(selected);
-        root.selectAll('span.path-selector')
+        root.selectAll('g.path-selector')
             .style({
                 'background-color': function(p, i) { return is_selected(p) ? '#1c1ae6' : 'white'; },
                 'color': function(p, i) { return is_selected(p) ? 'white' : 'black'; }
