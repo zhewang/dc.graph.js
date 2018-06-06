@@ -48,17 +48,8 @@ dc_graph.path_selector = function(parent, reader, pathsgroup, chartgroup) {
           .append('g')
           .attr('class', 'path-selector')
           .attr("transform", function(path, i) { return "translate(0, " + i*20 + ")"; })
-          .on('mouseover', function(p) {
-              highlight_paths_group.hover_changed([p]);
-          })
-          .on('mouseout', function(p) {
-              highlight_paths_group.hover_changed(null);
-          })
-          .on('click', function(p) {
-              highlight_paths_group.select_changed(toggle_paths(selected, [p]));
-          })
-          .each(function(path, i) {
-            var nodes = path.element_list.filter(function(d) { return d.element_type === 'node'; });
+          .each(function(path_data, i) {
+            var nodes = path_data.element_list.filter(function(d) { return d.element_type === 'node'; });
             // line
             var line = d3.select(this).append('line');
             line.attr('x1', xpadding+space)
@@ -85,7 +76,16 @@ dc_graph.path_selector = function(parent, reader, pathsgroup, chartgroup) {
             var text = d3.select(this).append('text');
             text.text('Path '+i)
               .attr('x', 0)
-              .attr('y', radius*1.7);
+              .attr('y', radius*1.7)
+              .on('mouseover', function() {
+                  highlight_paths_group.hover_changed([path_data]);
+              })
+              .on('mouseout', function() {
+                  highlight_paths_group.hover_changed(null);
+              })
+              .on('click', function() {
+                  highlight_paths_group.select_changed(toggle_paths(selected, [path_data]));
+              });
           });
         pathlist.exit().transition(1000).attr('opacity', 0).remove();
 
