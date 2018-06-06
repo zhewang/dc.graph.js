@@ -139,10 +139,10 @@ dc_graph.path_selector = function(parent, reader, pathsgroup, chartgroup) {
     function draw_selected() {
         var is_selected = contains_path(selected);
         root.selectAll('g.path-selector')
-            .style({
-                'background-color': function(p, i) { return is_selected(p) ? '#1c1ae6' : 'white'; },
-                'color': function(p, i) { return is_selected(p) ? 'white' : 'black'; }
-            });
+          .each(function(d, i) {
+            var textWeight = is_selected(d) ? 'bold' : 'normal';
+            d3.select(this).select('.path_label').attr('font-weight', textWeight);
+          });
     }
 
     highlight_paths_group
