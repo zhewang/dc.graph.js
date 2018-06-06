@@ -34,8 +34,14 @@ dc_graph.path_selector = function(parent, reader, pathsgroup, chartgroup) {
 
     function draw_paths(diagram, paths) {
         if(paths.length === 0) return;
+        var xpadding = 30;
+        var space = 30;
+        var radius = 8;
         // set the height of SVG accordingly
-        root.attr('height', 20*(paths.length+1));
+        root.attr('height', 20*(paths.length+1))
+          .attr('width', xpadding+(space+2*radius)*(paths.length/2+1)+20);
+
+        root.selectAll('.path-selector').remove();
 
         var pathlist = root.selectAll('g.path-selector').data(paths);
         pathlist.enter()
@@ -53,13 +59,11 @@ dc_graph.path_selector = function(parent, reader, pathsgroup, chartgroup) {
           })
           .each(function(path, i) {
             var nodes = path.element_list.filter(function(d) { return d.element_type === 'node'; });
-            var space = 30;
-            var radius = 8;
             // line
             var line = d3.select(this).append('line');
-            line.attr('x1', space)
+            line.attr('x1', xpadding+space)
               .attr('y1', radius+1)
-              .attr('x2', space*nodes.length)
+              .attr('x2', xpadding+space*nodes.length)
               .attr('y2', radius+1)
               .attr('stroke-width', 5)
               .attr('stroke', '#bdbdbd');
@@ -68,7 +72,7 @@ dc_graph.path_selector = function(parent, reader, pathsgroup, chartgroup) {
             var path = d3.select(this).selectAll('circle').data(nodes);
             path.enter()
               .append('circle')
-              .attr('cx', function(d, i) { return space*(i+1); })
+              .attr('cx', function(d, i) { return xpadding+space*(i+1); })
               .attr('cy', radius+1)
               .attr('r', radius)
               .attr('fill', function(d) {
@@ -76,6 +80,12 @@ dc_graph.path_selector = function(parent, reader, pathsgroup, chartgroup) {
                 var regeneratedNode = {key:d.property_map.ecomp_uid, value:d.property_map};
                 return diagram.nodeStroke()(regeneratedNode);
               });
+
+            // label
+            var text = d3.select(this).append('text');
+            text.text('Path '+i)
+              .attr('x', 0)
+              .attr('y', radius*1.7);
           });
         pathlist.exit().transition(1000).attr('opacity', 0).remove();
 
