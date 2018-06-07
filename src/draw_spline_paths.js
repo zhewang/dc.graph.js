@@ -160,7 +160,7 @@ dc_graph.draw_spline_paths = function(pathreader, pathprops, hoverprops, selectp
       var vecMag = function(v) { return Math.sqrt(v.x*v.x + v.y*v.y) };
 
       // get coordinates
-      var path_coord = getNodePosition(originalPoints);
+      var path_coord = getNodePositions(originalPoints);
       if(path_coord.length < 2) return "";
 
       // repeat first and last node
