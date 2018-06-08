@@ -56,6 +56,7 @@ dc_graph.path_selector = function(parent, reader, pathsgroup, chartgroup) {
               .attr('y1', radius+1)
               .attr('x2', xpadding+space*nodes.length)
               .attr('y2', radius+1)
+              .attr('opacity', 0.4)
               .attr('stroke-width', 5)
               .attr('stroke', '#bdbdbd');
 
@@ -66,6 +67,7 @@ dc_graph.path_selector = function(parent, reader, pathsgroup, chartgroup) {
               .attr('cx', function(d, i) { return xpadding+space*(i+1); })
               .attr('cy', radius+1)
               .attr('r', radius)
+              .attr('opacity', 0.4)
               .attr('fill', function(d) {
                 // TODO path_selector shouldn't know the data structure of orignal node objects
                 var regeneratedNode = {key:d.property_map.ecomp_uid, value:d.property_map};
@@ -132,7 +134,13 @@ dc_graph.path_selector = function(parent, reader, pathsgroup, chartgroup) {
       root.selectAll('g.path-selector')
         .each(function(d, i) {
           var textColor = is_hovered(d) ? '#e41a1c' : 'black';
+          var lineColor = is_hovered(d) ? 'black' : '#bdbdbd';
+          var opacity = is_hovered(d) ? '1' : '0.4';
           d3.select(this).select('.path_label').attr('fill', textColor);
+          d3.select(this).selectAll('line')
+            .attr('stroke', lineColor)
+            .attr('opacity', opacity);
+          d3.select(this).selectAll('circle').attr('opacity', opacity);
         });
     }
 
@@ -141,7 +149,14 @@ dc_graph.path_selector = function(parent, reader, pathsgroup, chartgroup) {
         root.selectAll('g.path-selector')
           .each(function(d, i) {
             var textWeight = is_selected(d) ? 'bold' : 'normal';
-            d3.select(this).select('.path_label').attr('font-weight', textWeight);
+            var lineColor = is_selected(d) ? 'black' : '#bdbdbd';
+            var opacity = is_selected(d) ? '1' : '0.4';
+            d3.select(this).select('.path_label')
+              .attr('font-weight', textWeight);
+            d3.select(this).selectAll('line')
+              .attr('stroke', lineColor)
+              .attr('opacity', opacity);
+            d3.select(this).selectAll('circle').attr('opacity', opacity);
           });
     }
 
